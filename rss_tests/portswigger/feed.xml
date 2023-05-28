@@ -1,0 +1,38 @@
+<rss version="2.0">
+  <channel>
+    <title>PortSwigger Research Blog</title>
+    <link>https://portswigger.net/research</link>
+    <description>Latest research articles from PortSwigger</description>
+    <item>
+      <title>First Entry</title>
+      <link>https://portswigger.net/research/first-entry</link>
+      <description>This is the first entry description</description>
+      <pubDate>2023-05-25T10:00:00Z</pubDate>
+      <guid>entry1</guid>
+      <author>John Doe</author>
+      <category>Security</category>
+      <comments>https://portswigger.net/research/first-entry#comments</comments>
+    </item>
+    <item>
+      <title>Second Entry</title>
+      <link>https://portswigger.net/research/second-entry</link>
+      <description>This is the second entry description</description>
+      <pubDate>2023-05-26T14:30:00Z</pubDate>
+      <guid>entry2</guid>
+      <author>Jane Smith</author>
+      <category>Web Application Security</category>
+      <comments>https://portswigger.net/research/second-entry#comments</comments>
+    </item>
+    <item>
+      <title>Third Entry</title>
+      <link>https://portswigger.net/research/third-entry</link>
+      <description>This is the third entry description</description>
+      <pubDate>2023-05-27T09:15:00Z</pubDate>
+      <guid>entry3</guid>
+      <author>Mike Johnson</author>
+      <category>Vulnerability Research</category>
+      <comments>https://portswigger.net/research/third-entry#comments</comments>
+    </item>
+  </channel>
+</rss>
+

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>ZDI Blog</title>
+    <link>https://www.zerodayinitiative.com/blog</link>
+    <description>ZDI Blog - Latest Security Research and Vulnerability Disclosures</description>
+    <language>en-us</language>
+    <pubDate>2023-05-25T12:00:00Z</pubDate>
+    <lastBuildDate>2023-05-25T12:00:00Z</lastBuildDate>
+    <item>
+      <title>Blog Post 1</title>
+      <link>https://www.zerodayinitiative.com/blog/post1</link>
+      <description>This is the description of Blog Post 1</description>
+      <pubDate>2023-05-25T10:00:00Z</pubDate>
+      <guid>https://www.zerodayinitiative.com/blog/post1</guid>
+    </item>
+    <item>
+      <title>Blog Post 2</title>
+      <link>https://www.zerodayinitiative.com/blog/post2</link>
+      <description>This is the description of Blog Post 2</description>
+      <pubDate>2023-05-24T08:30:00Z</pubDate>
+      <guid>https://www.zerodayinitiative.com/blog/post2</guid>
+    </item>
+  </channel>
+</rss>
+
