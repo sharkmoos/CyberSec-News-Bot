@@ -63,10 +63,10 @@ func (hn *HackerNewsRssFeed) getPageCategories(pageUrl string) ( string, error) 
 	}
 
   content := string(body)
-  log.Println(pageUrl)
-  re := regexp.MustCompile(`<span class=("|')p-tags("|')(.*)</span>`)
+  re := regexp.MustCompile(`<span class='p-tags'(.*)</span>`)
   match := re.FindStringSubmatch(content)
-	if len(match) >= 2 {
+	log.Printf("%v", match)
+  if len(match) > 1 {
     log.Printf("Not posting article '%v' due to lack of interesting\n", pageUrl)
     return match[1], nil
 	}
@@ -90,8 +90,10 @@ func (hn *HackerNewsRssFeed) filterNewsCats(category string) (bool) {
     "APT",
     "National Security",
     "Cloud Security",
+    "Linux",
   }
 
+  log.Println(category)
   for _, str := range interestingList {
     if strings.Contains(category, str) {
       return true
@@ -102,6 +104,7 @@ func (hn *HackerNewsRssFeed) filterNewsCats(category string) (bool) {
 
 func (hn *HackerNewsRssFeed) ParseNewRssContent(oldData RSSFeed, newData RSSFeed) ([]discordMessageData, error) {
 	oldHNData, ok := oldData.(*HackerNewsRssFeed)
+
 	if !ok {
 		return nil, errors.New("error: oldData is not of type HackerNewsRssFeed")
 	}
@@ -115,13 +118,13 @@ func (hn *HackerNewsRssFeed) ParseNewRssContent(oldData RSSFeed, newData RSSFeed
 	for _, newFeedItem := range newHNData.Channel.Items {
 		itemExists := false
 		for _, oldFeedItem := range oldHNData.Channel.Items {
-			if newFeedItem == oldFeedItem {
+      if newFeedItem.Title == oldFeedItem.Title {
 				log.Printf("Article titled '%v' already exists in old data. Stopping iteration.\n", newFeedItem.Title)
 				itemExists = true
-				break
+        break
 			}
 		}
-		if !itemExists {
+	  if !itemExists {
 			log.Printf("Article '%v' is new", newFeedItem.Title)
 
       category, err := hn.getPageCategories(newFeedItem.Link)
@@ -130,6 +133,7 @@ func (hn *HackerNewsRssFeed) ParseNewRssContent(oldData RSSFeed, newData RSSFeed
       }
 
       interestingCategory := hn.filterNewsCats(category); if !interestingCategory {
+        log.Printf("'%v' is not an interesting item, skipping", interestingCategory)
         continue
       }
 

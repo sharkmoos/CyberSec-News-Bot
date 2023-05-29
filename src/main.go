@@ -16,7 +16,7 @@ import (
 // based on the feeds URL
 type RSSFeedFactory func() RSSFeed
 var rssFeeds = map[string]RSSFeedFactory{
-   "https://googleprojectzero.blogspot.com/feeds/posts/default":     func() RSSFeed { return &ProjectZeroRssFeed{} },
+  "https://googleprojectzero.blogspot.com/feeds/posts/default":      func() RSSFeed { return &ProjectZeroRssFeed{} },
   "https://feeds.feedburner.com/TheHackersNews":                     func() RSSFeed { return &HackerNewsRssFeed{} },
   "https://www.zerodayinitiative.com/blog?format=rss":               func() RSSFeed { return &ZDIRssFeed{} },
   "https://portswigger.net/research/rss":                            func() RSSFeed { return &PortSwiggerRSSFeed{} },
@@ -26,9 +26,8 @@ var rssFeeds = map[string]RSSFeedFactory{
   // "http://127.0.0.1:8081/rss_tests/portswigger/feed.xml":               func() RSSFeed { return &PortSwiggerRSSFeed{} },
 }
 
-
 const ( 
-  pollFreq time.Duration = 10 
+  pollFreq time.Duration = 10   
 )
 
 var (
@@ -41,24 +40,23 @@ func rssPollLoop(feedUrl string) {
   // TODO: Pointless to store the entire RSS feed. After unmarshalling we could just keep the most recent 20 results or something
   var (
     pageHash []byte
+    oldPageHash []byte
     pageContents []byte
+    oldPageContents []byte
     oldPageXmlData RSSFeed 
     pageXmlData RSSFeed
   )
   
-  // get the starting data
-  oldPageHash, err := pollOnce(feedUrl)
   oldPageContents, err := queryRssFeed(feedUrl) 
-  createFeedType := rssFeeds[feedUrl] // is a ptr to the relevent struct generator func
-
-  if createFeedType == nil {
-    // this will occur if the URL has no feed structure type
-    log.Printf("Unsupported RSS feed: %s. Will not create monitor\n", feedUrl)
-    return
+  oldPageHash, err = getPageHash(oldPageContents)
+  if err != nil {
+    log.Panicln("err:", err.Error())
   }
+  log.Printf("starting with page hash %x for site %s", oldPageHash, feedUrl)
 
-	oldPageXmlData = createFeedType() 
-  pageXmlData = createFeedType()
+  oldPageXmlData = rssFeeds[feedUrl]()
+  pageXmlData = rssFeeds[feedUrl]()
+
 
   if err := xml.Unmarshal(oldPageContents, &oldPageXmlData); err != nil {
     // mostly occurs when the page struct does not represent the XML data closely enough
@@ -66,12 +64,17 @@ func rssPollLoop(feedUrl string) {
     return
   }
   for {
-    time.Sleep(pollFreq * time.Minute)
+    // time.Sleep(pollFreq * time.Minute)
     // time.Sleep(5 * time.Second)
-    pageHash, err = pollOnce(feedUrl)
+    pageContents, err = queryRssFeed(feedUrl) 
     if err != nil {
       log.Printf("err: %v. Continuing\n", err)
       continue
+    }
+
+    pageHash, err = getPageHash(pageContents)
+    if err != nil {
+      log.Panicln("err:", err.Error())
     }
 
     if bytes.Equal(oldPageHash, pageHash) {
@@ -79,14 +82,6 @@ func rssPollLoop(feedUrl string) {
       continue
     }
 
-    // Doing another request so soon doesn't player super nice with some feeds with rate limits (looking at you ZDI)
-    // TODO: Switch pollOnce to returning the page contents, call page hash from this function, this way after the comparison
-    //  we still have the contents to parse
-    pageContents, err = queryRssFeed(feedUrl)
-    if err != nil {
-      log.Printf("err: querying page - %v\tSkipping iteration\n", err)
-      continue
-    }
     if err := xml.Unmarshal(pageContents, &pageXmlData); err != nil {
       log.Printf("err: unmarshaling XML - %v\tStopping monitor\n", err)
       break
@@ -106,20 +101,6 @@ func rssPollLoop(feedUrl string) {
   }
 }
 
-
-func pollOnce(feedUrl string) (pageHash []byte, err error) {
-  pageContents, err := queryRssFeed(feedUrl) 
-  
-  if err != nil {
-    log.Panicln("err:", err)
-  }
-
-  pageHash, err = getPageHash(pageContents)
-  if err != nil {
-    log.Panicln("err:", err.Error())
-  }
-  return 
-}
 
 func getPageHash(pageBody []byte) (pageHash []byte, errorString error) {
   // sha256 the byte slice of a page. Return the hash as a byte slice.
@@ -145,8 +126,8 @@ func startPollingRss() {
 }
 
 func main() {
-  discordToken = os.Getenv("DISCORD_BOT_TOKEN ")
-  newsChannelId = os.Getenv("DISCORD_CHANNEL_ID ")
+  discordToken = os.Getenv("DISCORD_BOT_TOKEN")
+  newsChannelId = os.Getenv("DISCORD_CHANNEL_ID")
 
   if len(discordToken) < 1 || len(newsChannelId) < 1 {
     log.Fatalln("err: reading env vars")
