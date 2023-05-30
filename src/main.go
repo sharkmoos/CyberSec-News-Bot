@@ -64,7 +64,7 @@ func rssPollLoop(feedUrl string) {
     return
   }
   for {
-    // time.Sleep(pollFreq * time.Minute)
+    time.Sleep(pollFreq * time.Minute)
     // time.Sleep(5 * time.Second)
     pageContents, err = queryRssFeed(feedUrl) 
     if err != nil {
@@ -98,6 +98,7 @@ func rssPollLoop(feedUrl string) {
     oldPageHash = pageHash
     oldPageContents = pageContents
     oldPageXmlData = pageXmlData
+    pageXmlData = rssFeeds[feedUrl]()
   }
 }
 
