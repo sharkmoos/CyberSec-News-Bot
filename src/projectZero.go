@@ -1,28 +1,28 @@
 package main
 
 import (
-  "log"
-  "errors"
-  "encoding/xml"
+	"encoding/xml"
+	"errors"
+	"log"
+	"regexp"
 )
 
 type ProjectZeroRssFeed struct {
-	XMLName xml.Name `xml:"http://www.w3.org/2005/Atom feed"`
-	Title   string   `xml:"title"`
-	Link    string   `xml:"link"`
-	Updated string   `xml:"updated"`
-	Items []ProjectZeroRssItem `xml:"entry"`
+	XMLName xml.Name             `xml:"http://www.w3.org/2005/Atom feed"`
+	Title   string               `xml:"title"`
+	Link    string               `xml:"link"`
+	Updated string               `xml:"updated"`
+	Items   []ProjectZeroRssItem `xml:"entry"`
 }
 
-
 type ProjectZeroRssItem struct {
-	Title     string                   `xml:"title"`
-	Link      []ProjectZeroRssLink     `xml:"link"`
-	Published string                   `xml:"published"`
-	Updated   string                   `xml:"updated"`
-	Summary   ProjectZeroRssSummary    `xml:"summary"`
-	Content   ProjectZeroRssContent    `xml:"content"`
-	Id        string                   `xml:"id"`
+	Title     string                `xml:"title"`
+	Link      []ProjectZeroRssLink  `xml:"link"`
+	Published string                `xml:"published"`
+	Updated   string                `xml:"updated"`
+	Summary   ProjectZeroRssSummary `xml:"summary"`
+	Content   ProjectZeroRssContent `xml:"content"`
+	Id        string                `xml:"id"`
 }
 
 type ProjectZeroRssLink struct {
@@ -63,20 +63,33 @@ func (pz *ProjectZeroRssFeed) ParseNewRssContent(oldData RSSFeed, newData RSSFee
 		}
 		if !itemExists {
 			log.Printf("Article '%v' is new", newFeedItem.Title)
-      log.Println(newFeedItem)
+			log.Println(newFeedItem)
+
+			pattern := regexp.MustCompile("https://googleprojectzero\\.blogspot\\.com/\\d\\d\\d\\d")
+			var newsLink string
+			for _, str := range newFeedItem.Link {
+				matches := pattern.FindString(str.Href)
+				if matches != "" {
+					newsLink = str.Href
+					break
+				}
+			}
+
+			if newsLink == "" {
+				newsLink = "Unable to resolve link. Scream at @sharkmoos to fix."
+			}
 
 			messageContent := discordMessageData{
 				Title:       newFeedItem.Title,
 				Description: newFeedItem.Summary.Summary,
-				Link:        newFeedItem.Link[0].Href,
+				Link:        newsLink,
 			}
 			newContent = append(newContent, messageContent)
 		}
 	}
+
 	if len(newContent) > 20 {
 		return nil, errors.New("err: more than 20 new items. Logic bug likely. Exiting")
 	}
 	return newContent, nil
 }
-
-
