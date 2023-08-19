@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/xml"
-	"fmt"
 	"log"
 	"os"
 	"sync"
@@ -33,7 +32,7 @@ const (
 )
 
 var (
-	dg_ptr               *discordgo.Session
+	discordSession       *discordgo.Session
 	discordToken         string
 	newsChannelId        string
 	serverId             string
@@ -108,7 +107,9 @@ func rssPollLoop(feedUrl string) {
 }
 
 func getPageHash(pageBody []byte) (pageHash []byte, errorString error) {
-	// sha256 the byte slice of a page. Return the hash as a byte slice.
+	/*
+		sha256 the byte slice of a page. Return the hash as a byte slice.
+	*/
 	hasher := sha256.New()
 	hasher.Write(pageBody)
 	pageHash = hasher.Sum(nil)
@@ -130,7 +131,29 @@ func startPollingRss() {
 	wg.Wait()
 }
 
+func setCommitteeRoles(roles []*discordgo.Role) bool {
+	/*
+		Find the role IDs for the committee and prior committee roles.
+	*/
+	for _, role := range roles {
+		if role.Name == "Committee" {
+			committeeRoleID = role.ID
+		} else if role.Name == "Prior Committee" {
+			priorCommitteeRoleID = role.ID
+		}
+		if committeeRoleID != "" && priorCommitteeRoleID != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func main() {
+	var (
+		err   error
+		roles []*discordgo.Role
+	)
+
 	discordToken = os.Getenv("DISCORD_BOT_TOKEN")
 	newsChannelId = os.Getenv("DISCORD_CHANNEL_ID")
 	adminChannelId = os.Getenv("ADMIN_CHANNEL_ID")
@@ -140,62 +163,42 @@ func main() {
 		log.Fatalln("err: reading env vars")
 	}
 
-	dg, err := discordgo.New("Bot " + discordToken)
-	dg_ptr = dg
-	if err != nil {
-		log.Println("err: creating Discord session")
+	if discordSession, err = discordgo.New("Bot " + discordToken); err != nil {
+		log.Fatalln("err: creating Discord session")
 	}
 
-	defer dg.Close()
-
-	dg.AddHandler(discordMessageHandler)
-
-	dg_ptr.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	discordSession.AddHandlerOnce(func(session *discordgo.Session, event *discordgo.Ready) {
+		log.Println("Bot is connected and ready.")
+	})
+	discordSession.AddHandler(discordMessageHandler)
+	discordSession.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if h, ok := commandHandlers[i.ApplicationCommandData().Name]; ok {
 			h(s, i)
 		}
 	})
 
-	dg.AddHandlerOnce(func(session *discordgo.Session, event *discordgo.Ready) {
-		log.Println("Bot is connected and ready.")
-	})
-
-	err = dg.Open()
-	if err != nil {
-		return
+	if err = discordSession.Open(); err != nil {
+		log.Fatalln("err: opening connection to Discord")
 	}
 
-	roles, err := dg.GuildRoles(serverId)
-	if err != nil {
-		fmt.Println("Error retrieving roles:", err)
-		return
+	if roles, err = discordSession.GuildRoles(serverId); err != nil {
+		log.Fatalln("err: retrieving roles:")
 	}
 
-	for _, role := range roles {
-		log.Println(role.Name)
-		if role.Name == "Committee" {
-			committeeRoleID = role.ID
-		} else if role.Name == "Prior Committee" {
-			priorCommitteeRoleID = role.ID
-		}
-		if committeeRoleID != "" && priorCommitteeRoleID != "" {
-			break
-		}
-	}
-	if committeeRoleID == "" || priorCommitteeRoleID == "" {
-		fmt.Println("Error retrieving roles:", err)
-		return
+	if !setCommitteeRoles(roles) {
+		log.Fatalln("err: retrieving roles:")
 	}
 
 	registeredCommands := make([]*discordgo.ApplicationCommand, len(discordCommands))
 	for i, v := range discordCommands {
-		cmd, err := dg_ptr.ApplicationCommandCreate(dg_ptr.State.User.ID, serverId, v)
+		cmd, err := discordSession.ApplicationCommandCreate(discordSession.State.User.ID, serverId, v)
 		if err != nil {
 			log.Panicln("err: creating application command")
 		}
 		registeredCommands[i] = cmd
 	}
 
+	defer discordSession.Close()
 	log.Println("News polling started")
 	startPollingRss()
 }

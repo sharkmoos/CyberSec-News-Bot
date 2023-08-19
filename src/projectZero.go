@@ -1,3 +1,6 @@
+/*
+Code for handling the RSS feed provided by Google Project Zero
+*/
 package main
 
 import (
@@ -41,17 +44,20 @@ type ProjectZeroRssContent struct {
 }
 
 func (pz *ProjectZeroRssFeed) ParseNewRssContent(oldData RSSFeed, newData RSSFeed) ([]discordMessageData, error) {
-	oldHNData, ok := oldData.(*ProjectZeroRssFeed)
-	if !ok {
+	var (
+		oldHNData  *ProjectZeroRssFeed
+		newHNData  *ProjectZeroRssFeed
+		newContent []discordMessageData
+
+		ok bool
+	)
+	if oldHNData, ok = oldData.(*ProjectZeroRssFeed); !ok {
 		return nil, errors.New("error: oldData is not of type HackerNewsRssFeed")
 	}
-
-	newHNData, ok := newData.(*ProjectZeroRssFeed)
-	if !ok {
+	if newHNData, ok = newData.(*ProjectZeroRssFeed); !ok {
 		return nil, errors.New("error: newData is not of type HackerNewsRssFeed")
 	}
 
-	var newContent []discordMessageData
 	for _, newFeedItem := range newHNData.Items {
 		itemExists := false
 		for _, oldFeedItem := range oldHNData.Items {
@@ -74,7 +80,6 @@ func (pz *ProjectZeroRssFeed) ParseNewRssContent(oldData RSSFeed, newData RSSFee
 					break
 				}
 			}
-
 			if newsLink == "" {
 				newsLink = "Unable to resolve link. Scream at @sharkmoos to fix."
 			}
