@@ -1,26 +1,29 @@
+/*
+Code for handling the RSS feed provided by The Hacker News
+*/
 package main
 
 import (
-  "log"
-  "errors"
-  "net/http"
-  "encoding/xml"
-  "strings"
-  "regexp"
-  "io/ioutil"
+	"encoding/xml"
+	"errors"
+	"io"
+	"log"
+	"net/http"
+	"regexp"
+	"strings"
 )
 
 type HackerNewsRssFeed struct {
-	XMLName xml.Name `xml:"rss"`
-	Version string   `xml:"version,attr"`
+	XMLName xml.Name             `xml:"rss"`
+	Version string               `xml:"version,attr"`
 	Channel hackerNewsRssChannel `xml:"channel"`
 }
 
 type hackerNewsRssChannel struct {
-	Title       string    `xml:"title"`
-	Link        string    `xml:"link"`
-	Description string    `xml:"description"`
-  Items       []hackerNewsRssItem    `xml:"item"` // TODO: Refactor as a map, to make comparisons much faster
+	Title       string              `xml:"title"`
+	Link        string              `xml:"link"`
+	Description string              `xml:"description"`
+	Items       []hackerNewsRssItem `xml:"item"` // TODO: Refactor as a map, to make comparisons much faster
 }
 
 type hackerNewsRssItem struct {
@@ -47,97 +50,110 @@ type hackerNewsHtml struct {
 	} `xml:"body"`
 }
 
+var interestingList = []string{
+	"Vulnerability",
+	"Zero-Day",
+	"Espionage",
+	"Ransomware",
+	"Web Security",
+	"Cyber Threat",
+	"AppSec",
+	"Mobile Security",
+	"Malware",
+	"Cyber Espionage",
+	"APT",
+	"National Security",
+	"Cloud Security",
+	"Linux",
+}
 
+func (hn *HackerNewsRssFeed) getPageCategories(pageUrl string) (string, error) {
+	/*
+		Scrapes the page for the categories of the article
+	*/
+	var (
+		resp *http.Response
+		body []byte
+		err  error
+	)
 
-func (hn *HackerNewsRssFeed) getPageCategories(pageUrl string) ( string, error) {
-  resp, err := http.Get(pageUrl)
-  
-  if err != nil {
-    log.Panicln(err)
-  }
-
-  defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatalln("err:", err)
+	if resp, err = http.Get(pageUrl); err != nil {
+		log.Fatalln("err: ", err)
 	}
 
-  content := string(body)
-  re := regexp.MustCompile(`<span class='p-tags'(.*)</span>`)
-  match := re.FindStringSubmatch(content)
+	defer resp.Body.Close()
+	if body, err = io.ReadAll(resp.Body); err != nil {
+		log.Fatalln("err: ", err)
+	}
+
+	re := regexp.MustCompile(`<span class='p-tags'(.*)</span>`)
+	match := re.FindStringSubmatch(string(body))
 	log.Printf("%v", match)
-  if len(match) > 1 {
-    log.Printf("Not posting article '%v' due to lack of interesting\n", pageUrl)
-    return match[1], nil
+
+	if len(match) > 1 {
+		log.Printf("Not posting article '%v' due to lack of interesting tags\n", pageUrl)
+		return match[1], nil
 	}
 
 	return "", nil
 
 }
 
-func (hn *HackerNewsRssFeed) filterNewsCats(category string) (bool) {
-  interestingList := []string {
-    "Vulnerability", 
-    "Zero-Day",
-    "Espionage",
-    "Ransomware",
-    "Web Security",
-    "Cyber Threat",
-    "AppSec",
-    "Mobile Security",
-    "Malware",
-    "Cyber Espionage",
-    "APT",
-    "National Security",
-    "Cloud Security",
-    "Linux",
-  }
+func (hn *HackerNewsRssFeed) filterNewsCats(category string) bool {
+	/*
+		Filter out articles that are not interesting, using the tags provided by the website
+	*/
 
-  log.Println(category)
-  for _, str := range interestingList {
-    if strings.Contains(category, str) {
-      return true
-    }
-  }
-  return false
-} 
+	//log.Println(category)
+	for _, str := range interestingList {
+		if strings.Contains(category, str) {
+			return true
+		}
+	}
+	return false
+}
 
 func (hn *HackerNewsRssFeed) ParseNewRssContent(oldData RSSFeed, newData RSSFeed) ([]discordMessageData, error) {
-	oldHNData, ok := oldData.(*HackerNewsRssFeed)
+	var (
+		oldHNData  *HackerNewsRssFeed
+		newHNData  *HackerNewsRssFeed
+		newContent []discordMessageData
 
-	if !ok {
+		ok bool
+		//err error
+	)
+	if oldHNData, ok = oldData.(*HackerNewsRssFeed); !ok {
 		return nil, errors.New("error: oldData is not of type HackerNewsRssFeed")
 	}
 
-	newHNData, ok := newData.(*HackerNewsRssFeed)
-	if !ok {
+	if newHNData, ok = newData.(*HackerNewsRssFeed); !ok {
 		return nil, errors.New("error: newData is not of type HackerNewsRssFeed")
 	}
 
-	var newContent []discordMessageData
 	for _, newFeedItem := range newHNData.Channel.Items {
 		itemExists := false
 		for _, oldFeedItem := range oldHNData.Channel.Items {
-      if newFeedItem.Title == oldFeedItem.Title {
+			if newFeedItem.Title == oldFeedItem.Title {
 				log.Printf("Article titled '%v' already exists in old data. Stopping iteration.\n", newFeedItem.Title)
 				itemExists = true
-        break
+				break
 			}
 		}
-	  if !itemExists {
+		if !itemExists {
 			log.Printf("Article '%v' is new", newFeedItem.Title)
 
-      category, err := hn.getPageCategories(newFeedItem.Link)
-      if err != nil {
-        log.Fatalf("err: %v\n", err)
-      }
+			category, err := hn.getPageCategories(newFeedItem.Link)
+			if err != nil {
+				log.Fatalf("err: %v\n", err)
+			}
 
-      interestingCategory := hn.filterNewsCats(category); if !interestingCategory {
-        log.Printf("'%v' is not an interesting item, skipping", interestingCategory)
-        continue
-      }
+			interestingCategory := hn.filterNewsCats(category)
+			if !interestingCategory {
+				log.Printf("'%v' is not an interesting item, skipping", interestingCategory)
+				continue
+			}
 
-      messageContent := discordMessageData{
+			messageContent := discordMessageData{
 				Title:       newFeedItem.Title,
 				Description: newFeedItem.Description,
 				Link:        newFeedItem.Link,
@@ -150,4 +166,3 @@ func (hn *HackerNewsRssFeed) ParseNewRssContent(oldData RSSFeed, newData RSSFeed
 	}
 	return newContent, nil
 }
-

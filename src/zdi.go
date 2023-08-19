@@ -1,8 +1,12 @@
-package main 
+/*
+Code for handling the RSS feed provided by Zero Day Initiative
+*/
+
+package main
 
 import (
-  "errors"
-  "log"
+	"errors"
+	"log"
 )
 
 type ZDIRssFeed struct {
@@ -18,36 +22,40 @@ type ZDIRssFeed struct {
 }
 
 type ZDIItem struct {
-	Title       string    `xml:"title"`
-	Link        string    `xml:"link"`
-	Description string    `xml:"description"`
-	PubDate     string    `xml:"pubDate"`
-	GUID        string    `xml:"guid"`
+	Title       string `xml:"title"`
+	Link        string `xml:"link"`
+	Description string `xml:"description"`
+	PubDate     string `xml:"pubDate"`
+	GUID        string `xml:"guid"`
 }
 
-
 func (zdi *ZDIRssFeed) ParseNewRssContent(oldData RSSFeed, newData RSSFeed) ([]discordMessageData, error) {
-  oldZdiData, ok := oldData.(*ZDIRssFeed); if !ok {
-    return nil, errors.New("oldData is not of type ZDIRssFeed")
-  }
+	var (
+		oldZdiData *ZDIRssFeed
+		newZdiData *ZDIRssFeed
+		newContent []discordMessageData
 
-  newZdiData, ok := newData.(*ZDIRssFeed); if !ok {
-    return nil, errors.New("newData is not of type ZDIRssFeed")
-  }
+		ok bool
+	)
+	if oldZdiData, ok = oldData.(*ZDIRssFeed); !ok {
+		return nil, errors.New("oldData is not of type ZDIRssFeed")
+	}
+	if newZdiData, ok = newData.(*ZDIRssFeed); !ok {
+		return nil, errors.New("newData is not of type ZDIRssFeed")
+	}
 
-  var newContent []discordMessageData
-  for _, newFeedItem := range newZdiData.Channel.Items {
-    itemExists := false
-    for _, oldFeedItem := range oldZdiData.Channel.Items {
-      if oldFeedItem.GUID == newFeedItem.GUID {
-  			// log.Printf("Article titled '%v' already exists in old data. Stopping iteration.\n", newFeedItem.Title)
+	for _, newFeedItem := range newZdiData.Channel.Items {
+		itemExists := false
+		for _, oldFeedItem := range oldZdiData.Channel.Items {
+			if oldFeedItem.GUID == newFeedItem.GUID {
+				// log.Printf("Article titled '%v' already exists in old data. Stopping iteration.\n", newFeedItem.Title)
 				itemExists = true
 				break
 			}
 		}
 		if !itemExists {
 			log.Printf("Article '%v' is new", newFeedItem.Title)
-      log.Println(newFeedItem)
+			log.Println(newFeedItem)
 
 			messageContent := discordMessageData{
 				Title:       newFeedItem.Title,
@@ -62,4 +70,3 @@ func (zdi *ZDIRssFeed) ParseNewRssContent(oldData RSSFeed, newData RSSFeed) ([]d
 	}
 	return newContent, nil
 }
-

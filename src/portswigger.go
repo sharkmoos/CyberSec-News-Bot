@@ -1,14 +1,17 @@
+/*
+Code for handling the RSS feed provided by PortSwigger
+*/
 package main
 
 import (
-  "log"
-  "errors"
-  "encoding/xml"
+	"encoding/xml"
+	"errors"
+	"log"
 )
 
 type PortSwiggerRSSFeed struct {
-	XMLName xml.Name     `xml:"rss"`
-	Version string       `xml:"version,attr"`
+	XMLName xml.Name           `xml:"rss"`
+	Version string             `xml:"version,attr"`
 	Channel PortSwiggerChannel `xml:"channel"`
 }
 
@@ -31,17 +34,21 @@ type PortSwiggerItem struct {
 }
 
 func (pz *PortSwiggerRSSFeed) ParseNewRssContent(oldData RSSFeed, newData RSSFeed) ([]discordMessageData, error) {
-	oldHNData, ok := oldData.(*PortSwiggerRSSFeed)
-	if !ok {
+	var (
+		oldHNData  *PortSwiggerRSSFeed
+		newHNData  *PortSwiggerRSSFeed
+		newContent []discordMessageData
+
+		ok bool
+	)
+
+	if oldHNData, ok = oldData.(*PortSwiggerRSSFeed); !ok {
 		return nil, errors.New("error: oldData is not of type HackerNewsRssFeed")
 	}
-
-	newHNData, ok := newData.(*PortSwiggerRSSFeed)
-	if !ok {
+	if newHNData, ok = newData.(*PortSwiggerRSSFeed); !ok {
 		return nil, errors.New("error: newData is not of type HackerNewsRssFeed")
 	}
 
-	var newContent []discordMessageData
 	for _, newFeedItem := range newHNData.Channel.Items {
 		itemExists := false
 		for _, oldFeedItem := range oldHNData.Channel.Items {
@@ -53,7 +60,7 @@ func (pz *PortSwiggerRSSFeed) ParseNewRssContent(oldData RSSFeed, newData RSSFee
 		}
 		if !itemExists {
 			log.Printf("Article '%v' is new", newFeedItem.Title)
-      log.Println(newFeedItem)
+			log.Println(newFeedItem)
 
 			messageContent := discordMessageData{
 				Title:       newFeedItem.Title,
@@ -68,5 +75,3 @@ func (pz *PortSwiggerRSSFeed) ParseNewRssContent(oldData RSSFeed, newData RSSFee
 	}
 	return newContent, nil
 }
-
-

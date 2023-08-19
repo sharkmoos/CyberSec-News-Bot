@@ -48,88 +48,92 @@ var (
 	}
 )
 
+func hasAdminRole(userRoles []string) bool {
+	/*
+		Checks if the user has the committee or prior committee role
+	*/
+	for _, role := range userRoles {
+		if role == committeeRoleID || role == priorCommitteeRoleID {
+			return true
+		}
+	}
+	return false
+}
+
 func slashCommandHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	/*
+		Allow an admin to send links to the news channel. This is a lot better than the previous method !send
+		feature, because slash commands move the splitting of data to Discord, so we don't need to create logic for
+		parsing link, title etc. from the message.
+	*/
+	var (
+		messageData = discordMessageData{
+			Title:       "Admin submitted article",
+			Description: "",
+			Link:        "",
+		}
+		err error
+	)
+
 	if i.ID == s.State.User.ID {
 		return
 	}
 	if i.ChannelID != adminChannelId {
 		log.Println("Not the right channel")
-		err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		if s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: fmt.Sprintf("Please only use this command in <#%s>", adminChannelId),
 			},
-		})
-		if err != nil {
+		}) != nil {
 			log.Printf("Interaction response failed: %v", err)
 		}
 		return
 	}
 
-	roles, err := s.GuildRoles(i.GuildID)
-	if err != nil {
-		fmt.Println("Error retrieving roles:", err)
-		return
-	}
-
-	var hasRole bool
-	for _, role := range roles {
-		if !(role.ID == committeeRoleID) && !(role.ID == priorCommitteeRoleID) {
-			continue
-		}
-		for _, memberRole := range i.Member.Roles {
-			if memberRole == role.ID {
-				hasRole = true
-				break
-			}
-		}
-	}
-	if !hasRole {
-		err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	// I guess this is actually redundant because the channel defined above is currently an admin-only channel,
+	// but I'll leave it in, in case we want to change the channel in the future.
+	if !hasAdminRole(i.Member.Roles) {
+		if s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: fmt.Sprintf("You do not have the required role to use this command"),
 			},
-		})
-		if err != nil {
+		}) != nil {
 			log.Printf("Interaction response failed: %v", err)
 		}
 	}
 
-	var messageData discordMessageData
+	// retrieve the options from the slash command, thankfully Discord does the parsing for us
 	options := i.ApplicationCommandData().Options
 	optionMap := make(map[string]*discordgo.ApplicationCommandInteractionDataOption, len(options))
-
 	for _, opt := range options {
 		optionMap[opt.Name] = opt
 	}
 
-	if _, ok := optionMap["title"]; ok {
-		messageData.Title = "Admin submitted article: " + optionMap["title"].StringValue()
-	} else {
-		messageData.Title = "Admin submitted article"
-	}
-
-	if _, ok := optionMap["description"]; ok {
-		messageData.Description = optionMap["description"].StringValue()
-	} else {
-		messageData.Description = ""
-	}
-
+	// this is a required option, so we can assume it exists
 	messageData.Link = optionMap["link"].StringValue()
 
-	err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	// not going to get too clever about trying to parse the title and description from the web page or anything
+	// just leave it up to the admin
+	if _, ok := optionMap["title"]; ok {
+		messageData.Title = "Admin submitted article: " + optionMap["title"].StringValue()
+	}
+	if _, ok := optionMap["description"]; ok {
+		messageData.Description = optionMap["description"].StringValue()
+	}
+
+	if s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Content: fmt.Sprintf("Recieved link: %s, title: %s, description: %s", messageData.Link, messageData.Title, messageData.Description),
 		},
-	})
-	if err != nil {
+	}) != nil {
 		log.Printf("Interaction response failed: %v", err)
 	}
 
+	// use the same function as the RSS feed to send the message, making a nice rich text embed
 	submitNewRssContent([]discordMessageData{{Title: messageData.Title, Description: messageData.Description, Link: messageData.Link}})
-
 }
 
 func submitNewRssContent(newRssContent []discordMessageData) {
@@ -151,39 +155,13 @@ func submitNewRssContent(newRssContent []discordMessageData) {
 		}
 
 		log.Println("Sending message:", item.Title)
-		sendDiscordMessage(dg_ptr, embed)
+		sendDiscordMessage(discordSession, embed)
 	}
 }
 
 // DiscordMessageHandler monitor #disord-updates channel for commands
 func discordMessageHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
-	if m.Author.ID == s.State.User.ID {
-		return
-	}
-	if m.ChannelID != adminChannelId {
-		log.Println("Not the right channel")
-		return
-	}
-
-	roles, err := s.GuildRoles(m.GuildID)
-	if err != nil {
-		fmt.Println("Error retrieving roles:", err)
-		return
-	}
-
-	var hasRole bool
-	for _, role := range roles {
-		if !(role.ID == committeeRoleID) && !(role.ID == priorCommitteeRoleID) {
-			continue
-		}
-		for _, memberRole := range m.Member.Roles {
-			if memberRole == role.ID {
-				hasRole = true
-				break
-			}
-		}
-	}
-	if !hasRole {
+	if m.Author.ID == s.State.User.ID || m.ChannelID != adminChannelId || !hasAdminRole(m.Member.Roles) {
 		return
 	}
 
@@ -198,21 +176,18 @@ func discordMessageHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	// Respond to the message with the link
 	response := fmt.Sprintf("Received link: %s", link)
-	_, err = s.ChannelMessageSend(m.ChannelID, response)
-	if err != nil {
+	if _, err := s.ChannelMessageSend(m.ChannelID, response); err != nil {
 		fmt.Println("Error sending message:", err)
 	}
 
-	_, err = s.ChannelMessageSend(newsChannelId, "Admin submitted article\n\n"+link)
-	if err != nil {
+	if _, err := s.ChannelMessageSend(newsChannelId, "Admin submitted article\n\n"+link); err != nil {
 		fmt.Println("Error sending message:", err)
 	}
 }
 
 func sendDiscordMessage(session *discordgo.Session, message *discordgo.MessageSend) {
 	log.Println("Session:", session)
-	_, err := session.ChannelMessageSendComplex(newsChannelId, message)
-	if err != nil {
+	if _, err := session.ChannelMessageSendComplex(newsChannelId, message); err != nil {
 		log.Println("err: Message failed to send - ", err)
 	}
 }
