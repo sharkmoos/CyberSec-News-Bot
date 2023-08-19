@@ -150,6 +150,12 @@ func main() {
 
 	dg.AddHandler(discordMessageHandler)
 
+	dg_ptr.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+		if h, ok := commandHandlers[i.ApplicationCommandData().Name]; ok {
+			h(s, i)
+		}
+	})
+
 	dg.AddHandlerOnce(func(session *discordgo.Session, event *discordgo.Ready) {
 		log.Println("Bot is connected and ready.")
 	})
@@ -179,6 +185,15 @@ func main() {
 	if committeeRoleID == "" || priorCommitteeRoleID == "" {
 		fmt.Println("Error retrieving roles:", err)
 		return
+	}
+
+	registeredCommands := make([]*discordgo.ApplicationCommand, len(discordCommands))
+	for i, v := range discordCommands {
+		cmd, err := dg_ptr.ApplicationCommandCreate(dg_ptr.State.User.ID, serverId, v)
+		if err != nil {
+			log.Panicln("err: creating application command")
+		}
+		registeredCommands[i] = cmd
 	}
 
 	log.Println("News polling started")
