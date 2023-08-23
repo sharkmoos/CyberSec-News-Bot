@@ -102,6 +102,7 @@ func slashCommandHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		}) != nil {
 			log.Printf("Interaction response failed: %v", err)
 		}
+		return
 	}
 
 	// retrieve the options from the slash command, thankfully Discord does the parsing for us
@@ -165,13 +166,18 @@ func discordMessageHandler(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	// Check if the message content starts with "!send"
 	content := strings.TrimSpace(m.Content)
-	if !strings.Contains(content, "!send") {
+	// Check if the message content starts with !send
+	// if string does not start with !send, return
+	if !strings.HasPrefix(content, "!send") {
 		return
 	}
 
 	// extract the link from the message by splitting starting at https:// and ending at a space
+	// less exhaustive than using regex still...
+	if !strings.Contains(content, "https://") {
+		return
+	}
 	link := "https://" + strings.Split(content, "https://")[1]
 
 	// Respond to the message with the link
